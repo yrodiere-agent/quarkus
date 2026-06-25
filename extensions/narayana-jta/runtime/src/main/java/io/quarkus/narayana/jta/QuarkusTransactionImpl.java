@@ -10,11 +10,13 @@ import jakarta.transaction.Status;
 import jakarta.transaction.SystemException;
 import jakarta.transaction.Transaction;
 import jakarta.transaction.TransactionManager;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.UserTransaction;
 
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.Arc;
+import io.quarkus.narayana.jta.runtime.ReadOnlyTransactionSynchronization;
 import io.quarkus.narayana.jta.runtime.TransactionManagerConfiguration;
 
 class QuarkusTransactionImpl {
@@ -130,6 +132,7 @@ class QuarkusTransactionImpl {
 
     private static <T> T callInOurTx(RunOptionsBase options, Callable<T> task) {
         begin(options);
+        boolean readOnly = options != null && options.readOnly;
         try {
             T ret;
             try {
@@ -139,7 +142,7 @@ class QuarkusTransactionImpl {
                 if (options.exceptionHandler != null) {
                     handling = options.exceptionHandler.apply(t);
                 }
-                if (handling == TransactionExceptionResult.ROLLBACK) {
+                if (readOnly || handling == TransactionExceptionResult.ROLLBACK) {
                     getUserTransaction().rollback();
                 } else {
                     getUserTransaction().commit();
@@ -151,7 +154,11 @@ class QuarkusTransactionImpl {
                 }
             }
             try {
-                getUserTransaction().commit();
+                if (readOnly) {
+                    getUserTransaction().rollback();
+                } else {
+                    getUserTransaction().commit();
+                }
             } catch (Throwable t) {
                 throw new QuarkusTransactionException(t);
             }
@@ -167,6 +174,10 @@ class QuarkusTransactionImpl {
     }
 
     private static <T> T callInTheirTx(RunOptionsBase options, Callable<T> task) {
+        if (options != null && options.readOnly) {
+            throw new QuarkusTransactionException(
+                    "Cannot mark a joining transaction as read-only. Use requiresNew() to start a new read-only transaction.");
+        }
         try {
             T ret;
             try {
@@ -198,6 +209,7 @@ class QuarkusTransactionImpl {
 
     private static void begin(RunOptionsBase options) {
         int timeout = options != null ? options.timeout : 0;
+        boolean readOnly = options != null && options.readOnly;
         try {
             if (timeout > 0) {
                 getUserTransaction().setTransactionTimeout(timeout);
@@ -216,6 +228,10 @@ class QuarkusTransactionImpl {
                 }
             }
         }
+        if (readOnly) {
+            ReadOnlyTransactionSynchronization.markReadOnly(
+                    Arc.container().instance(TransactionSynchronizationRegistry.class).get());
+        }
     }
 
     static void begin(BeginOptions options) {
@@ -233,7 +249,12 @@ class QuarkusTransactionImpl {
 
     static void commit() {
         try {
-            getUserTransaction().commit();
+            if (ReadOnlyTransactionSynchronization
+                    .isReadOnly(Arc.container().instance(TransactionSynchronizationRegistry.class).get())) {
+                getUserTransaction().rollback();
+            } else {
+                getUserTransaction().commit();
+            }
         } catch (SystemException | RollbackException | HeuristicMixedException | HeuristicRollbackException e) {
             throw new QuarkusTransactionException(e);
         }

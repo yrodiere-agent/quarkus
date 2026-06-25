@@ -22,6 +22,7 @@ import jakarta.transaction.Status;
 import jakarta.transaction.SystemException;
 import jakarta.transaction.Transaction;
 import jakarta.transaction.TransactionManager;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.Transactional;
 
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -33,9 +34,11 @@ import com.arjuna.ats.jta.logging.jtaLogger;
 
 import io.quarkus.arc.runtime.InterceptorBindings;
 import io.quarkus.narayana.jta.runtime.NotifyingTransactionManager;
+import io.quarkus.narayana.jta.runtime.ReadOnlyTransactionSynchronization;
 import io.quarkus.narayana.jta.runtime.TransactionConfiguration;
 import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.runtime.BlockingOperationNotAllowedException;
+import io.quarkus.transaction.annotations.ReadOnly;
 import io.quarkus.transaction.annotations.Rollback;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.converters.ReactiveTypeConverter;
@@ -51,6 +54,9 @@ public abstract class TransactionalInterceptorBase implements Serializable {
 
     @Inject
     TransactionManager transactionManager;
+
+    @Inject
+    TransactionSynchronizationRegistry transactionSynchronizationRegistry;
 
     private final boolean userTransactionAvailable;
 
@@ -134,6 +140,21 @@ public abstract class TransactionalInterceptorBase implements Serializable {
         return configuration;
     }
 
+    private boolean isReadOnly(InvocationContext ic) {
+        ReadOnly readOnly = ic.getMethod().getAnnotation(ReadOnly.class);
+        if (readOnly != null) {
+            return true;
+        }
+        Class<?> clazz;
+        Object target = ic.getTarget();
+        if (target != null) {
+            clazz = target.getClass();
+        } else {
+            clazz = ic.getMethod().getDeclaringClass();
+        }
+        return clazz.getAnnotation(ReadOnly.class) != null;
+    }
+
     protected Object invokeInOurTx(InvocationContext ic, TransactionManager tm) throws Exception {
         return invokeInOurTx(ic, tm, () -> {
         });
@@ -158,6 +179,10 @@ public abstract class TransactionalInterceptorBase implements Serializable {
             if (timeoutConfiguredForMethod > 0) {
                 tm.setTransactionTimeout(currentTmTimeout);
             }
+        }
+
+        if (isReadOnly(ic)) {
+            ReadOnlyTransactionSynchronization.markReadOnly(transactionSynchronizationRegistry);
         }
 
         boolean throwing = false;
@@ -383,6 +408,9 @@ public abstract class TransactionalInterceptorBase implements Serializable {
             throw new RuntimeException("Changing timeout via @TransactionConfiguration can only be done " +
                     "at the entry level of a transaction");
         }
+        if (isReadOnly(ic)) {
+            throw new RuntimeException("@ReadOnly can only be used at the entry level of a transaction");
+        }
     }
 
     protected void handleExceptionNoThrow(InvocationContext ic, Throwable t, Transaction tx)
@@ -456,7 +484,8 @@ public abstract class TransactionalInterceptorBase implements Serializable {
                 throw new RuntimeException(jtaLogger.i18NLogger.get_wrong_tx_on_thread());
             }
 
-            if (tx.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
+            if (tx.getStatus() == Status.STATUS_MARKED_ROLLBACK
+                    || ReadOnlyTransactionSynchronization.isReadOnly(transactionSynchronizationRegistry)) {
                 tm.rollback();
             } else {
                 tm.commit();

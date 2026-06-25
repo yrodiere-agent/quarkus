@@ -12,6 +12,7 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.arc.runtime.InterceptorBindings;
 import io.quarkus.reactive.transaction.runtime.pool.TransactionalContextPool;
+import io.quarkus.transaction.annotations.ReadOnly;
 import io.quarkus.transaction.annotations.Rollback;
 import io.quarkus.vertx.core.runtime.context.VertxContextSafetyToggle;
 import io.smallrye.common.vertx.ContextLocals;
@@ -61,6 +62,7 @@ public abstract class TransactionalInterceptorBase {
         if (reactiveInterceptorShouldRun()) {
             validateTransactionalType(context); // So far only REQUIRED is supported
             validateLegacyPanacheAnnotations();
+            rejectReadOnly(context);
 
             Transactional annotation = getTransactionalAnnotation(context);
             // Deferral allows the Uni to be reused (re-subscribed-to) in different Vert.x contexts.
@@ -303,6 +305,17 @@ public abstract class TransactionalInterceptorBase {
             return context;
         } else {
             throw new IllegalStateException("No current Vertx context found");
+        }
+    }
+
+    private static void rejectReadOnly(InvocationContext ic) {
+        ReadOnly readOnly = ic.getMethod().getAnnotation(ReadOnly.class);
+        if (readOnly == null) {
+            readOnly = ic.getMethod().getDeclaringClass().getAnnotation(ReadOnly.class);
+        }
+        if (readOnly != null) {
+            throw new UnsupportedOperationException(
+                    "@ReadOnly is not yet supported on reactive transactions");
         }
     }
 

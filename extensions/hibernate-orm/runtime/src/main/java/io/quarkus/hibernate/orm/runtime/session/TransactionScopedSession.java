@@ -67,6 +67,7 @@ import org.hibernate.stat.SessionStatistics;
 import io.quarkus.arc.Arc;
 import io.quarkus.hibernate.orm.runtime.HibernateOrmRuntimeConfig;
 import io.quarkus.hibernate.orm.runtime.RequestScopedSessionHolder;
+import io.quarkus.narayana.jta.runtime.ReadOnlyTransactionSynchronization;
 import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.runtime.BlockingOperationNotAllowedException;
 
@@ -108,6 +109,10 @@ public class TransactionScopedSession implements Session {
             Session newSession = jtaSessionOpener.openSession();
             // The session has automatically joined the JTA transaction when it was constructed.
             transactionSynchronizationRegistry.putResource(sessionKey, newSession);
+            if (ReadOnlyTransactionSynchronization.isReadOnly(transactionSynchronizationRegistry)) {
+                newSession.setDefaultReadOnly(true);
+                newSession.setHibernateFlushMode(FlushMode.MANUAL);
+            }
             // No need to flush or close the session upon transaction completion:
             // Hibernate ORM itself registers a transaction that does just that.
             // See:
