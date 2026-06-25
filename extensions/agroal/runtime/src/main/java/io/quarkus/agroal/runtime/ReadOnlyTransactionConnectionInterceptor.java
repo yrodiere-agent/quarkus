@@ -15,6 +15,11 @@ import io.quarkus.narayana.jta.runtime.ReadOnlyTransactionSynchronization;
 /**
  * An {@link AgroalPoolInterceptor} that sets {@link Connection#setReadOnly(boolean) Connection.setReadOnly(true)}
  * on connections acquired within a read-only transaction, and resets it when the connection is returned to the pool.
+ * <p>
+ * TODO once Narayana implements Jakarta Transactions read-only, replace
+ * {@link ReadOnlyTransactionSynchronization#isReadOnly(TransactionSynchronizationRegistry)}
+ * with {@code TransactionSynchronizationRegistry.isReadOnly()}.
+ * See https://github.com/jakartaee/transactions/pull/222
  */
 @Singleton
 public class ReadOnlyTransactionConnectionInterceptor implements AgroalPoolInterceptor {

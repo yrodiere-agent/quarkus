@@ -140,6 +140,8 @@ public abstract class TransactionalInterceptorBase implements Serializable {
         return configuration;
     }
 
+    // TODO replace with @Transactional(readOnly = true) once Jakarta Transactions adds the readOnly attribute
+    //  and Narayana implements it. See https://github.com/jakartaee/transactions/pull/222
     private boolean isReadOnly(InvocationContext ic) {
         ReadOnly readOnly = ic.getMethod().getAnnotation(ReadOnly.class);
         if (readOnly != null) {
@@ -181,6 +183,8 @@ public abstract class TransactionalInterceptorBase implements Serializable {
             }
         }
 
+        // TODO replace with tm.setReadOnly(true) before tm.begin() once Narayana implements
+        //  Jakarta Transactions read-only. See https://github.com/jakartaee/transactions/pull/222
         if (isReadOnly(ic)) {
             ReadOnlyTransactionSynchronization.markReadOnly(transactionSynchronizationRegistry);
         }
@@ -400,6 +404,10 @@ public abstract class TransactionalInterceptorBase implements Serializable {
         return ic.proceed();
     }
 
+    // TODO once Narayana implements Jakarta Transactions read-only, also reject a non-read-only method
+    //  joining a read-only transaction (the spec requires TransactionalException with nested
+    //  InvalidTransactionException in both directions).
+    //  See https://github.com/jakartaee/transactions/pull/222
     private void checkConfiguration(InvocationContext ic) {
         TransactionConfiguration configAnnotation = getTransactionConfiguration(ic);
         if (configAnnotation != null && ((configAnnotation.timeout() != TransactionConfiguration.UNSET_TIMEOUT)
@@ -484,6 +492,9 @@ public abstract class TransactionalInterceptorBase implements Serializable {
                 throw new RuntimeException(jtaLogger.i18NLogger.get_wrong_tx_on_thread());
             }
 
+            // TODO once Narayana implements Jakarta Transactions read-only, replace
+            //  ReadOnlyTransactionSynchronization.isReadOnly(...) with tsr.isReadOnly() or tx.isReadOnly().
+            //  See https://github.com/jakartaee/transactions/pull/222
             if (tx.getStatus() == Status.STATUS_MARKED_ROLLBACK
                     || ReadOnlyTransactionSynchronization.isReadOnly(transactionSynchronizationRegistry)) {
                 tm.rollback();

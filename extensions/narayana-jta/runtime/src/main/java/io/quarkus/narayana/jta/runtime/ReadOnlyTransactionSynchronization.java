@@ -5,6 +5,13 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 /**
  * Utility for storing and retrieving the "read-only transaction" flag in the
  * {@link TransactionSynchronizationRegistry}, scoped to the current JTA transaction.
+ * <p>
+ * This is a temporary workaround until Narayana implements the Jakarta Transactions read-only API.
+ * Once available, {@link #markReadOnly(TransactionSynchronizationRegistry)} should be replaced by
+ * {@code TransactionManager.setReadOnly(true)} (called before {@code begin()}),
+ * and {@link #isReadOnly(TransactionSynchronizationRegistry)} should be replaced by
+ * {@code TransactionSynchronizationRegistry.isReadOnly()} or {@code Transaction.isReadOnly()}.
+ * See https://github.com/jakartaee/transactions/pull/222
  */
 public final class ReadOnlyTransactionSynchronization {
 

@@ -130,6 +130,9 @@ class QuarkusTransactionImpl {
         }
     }
 
+    // TODO once Narayana implements Jakarta Transactions read-only, the readOnly field could be
+    //  replaced by transaction.isReadOnly() to decide whether to rollback instead of commit.
+    //  See https://github.com/jakartaee/transactions/pull/222
     private static <T> T callInOurTx(RunOptionsBase options, Callable<T> task) {
         begin(options);
         boolean readOnly = options != null && options.readOnly;
@@ -173,6 +176,9 @@ class QuarkusTransactionImpl {
         }
     }
 
+    // TODO once Narayana implements Jakarta Transactions read-only, replace
+    //  ReadOnlyTransactionSynchronization.markReadOnly(...) with the standard API.
+    //  See https://github.com/jakartaee/transactions/pull/222
     private static <T> T callInTheirTx(RunOptionsBase options, Callable<T> task) {
         if (options != null && options.readOnly) {
             throw new QuarkusTransactionException(
@@ -228,6 +234,9 @@ class QuarkusTransactionImpl {
                 }
             }
         }
+        // TODO once Narayana implements Jakarta Transactions read-only, replace with
+        //  tm.setReadOnly(true) called BEFORE begin().
+        //  See https://github.com/jakartaee/transactions/pull/222
         if (readOnly) {
             ReadOnlyTransactionSynchronization.markReadOnly(
                     Arc.container().instance(TransactionSynchronizationRegistry.class).get());
@@ -247,6 +256,9 @@ class QuarkusTransactionImpl {
         }
     }
 
+    // TODO once Narayana implements Jakarta Transactions read-only, replace
+    //  ReadOnlyTransactionSynchronization.isReadOnly(...) with tsr.isReadOnly().
+    //  See https://github.com/jakartaee/transactions/pull/222
     static void commit() {
         try {
             if (ReadOnlyTransactionSynchronization

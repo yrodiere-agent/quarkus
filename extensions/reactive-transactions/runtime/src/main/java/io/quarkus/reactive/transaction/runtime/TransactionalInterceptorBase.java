@@ -308,6 +308,9 @@ public abstract class TransactionalInterceptorBase {
         }
     }
 
+    // TODO once Narayana implements Jakarta Transactions read-only, also check for
+    //  @Transactional(readOnly = true) in addition to @ReadOnly.
+    //  See https://github.com/jakartaee/transactions/pull/222
     private static void rejectReadOnly(InvocationContext ic) {
         ReadOnly readOnly = ic.getMethod().getAnnotation(ReadOnly.class);
         if (readOnly == null) {

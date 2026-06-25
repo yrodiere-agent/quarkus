@@ -109,6 +109,8 @@ public class TransactionScopedSession implements Session {
             Session newSession = jtaSessionOpener.openSession();
             // The session has automatically joined the JTA transaction when it was constructed.
             transactionSynchronizationRegistry.putResource(sessionKey, newSession);
+            // TODO once Narayana implements Jakarta Transactions read-only, replace with tsr.isReadOnly().
+            //  See https://github.com/jakartaee/transactions/pull/222
             if (ReadOnlyTransactionSynchronization.isReadOnly(transactionSynchronizationRegistry)) {
                 newSession.setDefaultReadOnly(true);
                 newSession.setHibernateFlushMode(FlushMode.MANUAL);
