@@ -2,6 +2,7 @@ package io.quarkus.narayana.jta.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -13,6 +14,12 @@ import jakarta.annotation.Priority;
 import jakarta.interceptor.Interceptor;
 import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionScoped;
+
+import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.DotName;
+import org.jboss.jandex.MethodInfo;
 
 import com.arjuna.ats.arjuna.common.ObjectStoreEnvironmentBean;
 import com.arjuna.ats.arjuna.recovery.TransactionStatusConnectionManager;
@@ -45,6 +52,7 @@ import io.quarkus.arc.deployment.CustomScopeBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.deployment.SyntheticBeansRuntimeInitBuildItem;
+import io.quarkus.arc.deployment.TransformedAnnotationsBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.deployment.Capabilities;
@@ -59,6 +67,7 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.NativeImageFeatureBuildItem;
+import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -82,6 +91,9 @@ import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorSuppo
 import io.smallrye.context.jta.context.propagation.JtaContextProvider;
 
 class NarayanaJtaProcessor {
+
+    private static final DotName READ_ONLY = DotName.createSimple("io.quarkus.transaction.annotations.ReadOnly");
+    private static final DotName TRANSACTIONAL = DotName.createSimple("jakarta.transaction.Transactional");
 
     private static final String TEST_TRANSACTION = "io.quarkus.test.TestTransaction";
 
@@ -261,6 +273,76 @@ class NarayanaJtaProcessor {
     @BuildStep
     void logCleanupFilters(BuildProducer<LogCleanupFilterBuildItem> logCleanupFilters) {
         logCleanupFilters.produce(new LogCleanupFilterBuildItem("com.arjuna.ats.jbossatx", "ARJUNA032010:", "ARJUNA032013:"));
+    }
+
+    @BuildStep
+    @Produce(ServiceStartBuildItem.class)
+    void validateReadOnlyAnnotation(CombinedIndexBuildItem index, TransformedAnnotationsBuildItem transformedAnnotations) {
+        Collection<AnnotationInstance> readOnlyAnnotations = index.getIndex().getAnnotations(READ_ONLY);
+        if (readOnlyAnnotations.isEmpty()) {
+            return;
+        }
+        for (AnnotationInstance readOnly : readOnlyAnnotations) {
+            AnnotationTarget target = readOnly.target();
+            if (target.kind() == AnnotationTarget.Kind.METHOD) {
+                MethodInfo method = target.asMethod();
+                AnnotationInstance transactional = transformedAnnotations.getAnnotation(method, TRANSACTIONAL);
+                if (transactional == null) {
+                    transactional = transformedAnnotations.getAnnotation(method.declaringClass(), TRANSACTIONAL);
+                }
+                if (transactional == null) {
+                    throw new IllegalStateException(
+                            "@ReadOnly is only supported on methods or classes also annotated with @Transactional. "
+                                    + "Offending method: " + method.declaringClass().name() + "#" + method.name());
+                }
+                rejectIncompatibleTxType(transactional,
+                        method.declaringClass().name() + "#" + method.name());
+            } else if (target.kind() == AnnotationTarget.Kind.CLASS) {
+                ClassInfo clazz = target.asClass();
+                AnnotationInstance transactional = transformedAnnotations.getAnnotation(clazz, TRANSACTIONAL);
+                if (transactional != null) {
+                    rejectIncompatibleTxType(transactional, clazz.name().toString());
+                    for (MethodInfo method : clazz.methods()) {
+                        AnnotationInstance methodTransactional = transformedAnnotations.getAnnotation(method,
+                                TRANSACTIONAL);
+                        if (methodTransactional != null) {
+                            rejectIncompatibleTxType(methodTransactional,
+                                    clazz.name() + "#" + method.name());
+                        }
+                    }
+                } else {
+                    boolean hasTransactionalMethod = false;
+                    for (MethodInfo method : clazz.methods()) {
+                        AnnotationInstance methodTransactional = transformedAnnotations.getAnnotation(method,
+                                TRANSACTIONAL);
+                        if (methodTransactional != null) {
+                            hasTransactionalMethod = true;
+                            rejectIncompatibleTxType(methodTransactional,
+                                    clazz.name() + "#" + method.name());
+                        }
+                    }
+                    if (!hasTransactionalMethod) {
+                        throw new IllegalStateException(
+                                "@ReadOnly is only supported on methods or classes also annotated with @Transactional. "
+                                        + "Offending class: " + clazz.name());
+                    }
+                }
+            }
+        }
+    }
+
+    private static void rejectIncompatibleTxType(AnnotationInstance transactional, String location) {
+        var txTypeValue = transactional.value();
+        if (txTypeValue == null) {
+            return;
+        }
+        String txType = txTypeValue.asEnum();
+        if ("NEVER".equals(txType) || "NOT_SUPPORTED".equals(txType)) {
+            throw new IllegalStateException(
+                    "@ReadOnly cannot be combined with @Transactional(" + txType
+                            + ") because this transaction type does not start a transaction. "
+                            + "Offending element: " + location);
+        }
     }
 
     private void allowUnsafeMultipleLastResources(NarayanaJtaRecorder recorder,
