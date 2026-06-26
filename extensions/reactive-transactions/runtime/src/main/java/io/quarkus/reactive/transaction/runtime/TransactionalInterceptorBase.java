@@ -48,6 +48,9 @@ public abstract class TransactionalInterceptorBase {
     // This key is used by Panache internally it's the marker key the ReactiveTransactional interceptor uses
     public static final String REACTIVE_TRANSACTIONAL_METHOD_KEY = "hibernate.reactive.reactiveTransactional";
 
+    // This key is used to indicate the transaction is read-only (set by @ReadOnly annotation)
+    public static final String READ_ONLY_KEY = "hibernate.reactive.readOnly";
+
     private static final Logger LOG = Logger.getLogger(TransactionalInterceptorBase.class);
 
     private static final String ERROR_MSG = "@Transactional reactive support requires a safe (isolated) Vert.x sub-context, but the current context hasn't been flagged as such.";
@@ -62,19 +65,20 @@ public abstract class TransactionalInterceptorBase {
         if (reactiveInterceptorShouldRun()) {
             validateTransactionalType(context); // So far only REQUIRED is supported
             validateLegacyPanacheAnnotations();
-            rejectReadOnly(context);
 
+            boolean readOnly = isReadOnly(context);
             Transactional annotation = getTransactionalAnnotation(context);
             // Deferral allows the Uni to be reused (re-subscribed-to) in different Vert.x contexts.
             return Uni.createFrom()
-                    .deferred(() -> defineReactiveTransactionalChain(annotation, method, () -> proceedUni(context)));
+                    .deferred(() -> defineReactiveTransactionalChain(annotation, method, readOnly,
+                            () -> proceedUni(context)));
         }
         LOG.tracef("Transactional interceptor end from method %s", method);
         return context.proceed();
     }
 
-    protected <T> Uni<T> defineReactiveTransactionalChain(Transactional annotation, Method method, Supplier<Uni<T>> work) {
-        // We are running on the retrieved context, however, the method also switch the safety flag.
+    protected <T> Uni<T> defineReactiveTransactionalChain(Transactional annotation, Method method, boolean readOnly,
+            Supplier<Uni<T>> work) {
         Context context = vertxContext();
 
         if (ContextLocals.get(TRANSACTIONAL_METHOD_KEY).isEmpty()) {
@@ -87,12 +91,15 @@ public abstract class TransactionalInterceptorBase {
              */
             LOG.tracef("Setting this method as transactional: %s", method);
             ContextLocals.put(TRANSACTIONAL_METHOD_KEY, true);
+            if (readOnly) {
+                ContextLocals.put(READ_ONLY_KEY, true);
+            }
 
             return work.get()
                     .onFailure().call(exception -> rollbackOrCommitBasedOnException(context, annotation, exception))
                     .onCancellation().call(this::rollbackOnCancel)
                     .call(() -> { // Good path - commit or rollback if marked
-                        if (reactiveResource.isMarkedForRollback(context)) {
+                        if (readOnly || reactiveResource.isMarkedForRollback(context)) {
                             LOG.tracef("Transaction marked for rollback, rolling back from method %s", method);
                             return rollbackOnCancel();
                         }
@@ -197,6 +204,9 @@ public abstract class TransactionalInterceptorBase {
     Uni<Void> rollbackOrCommitBasedOnException(Context context, Transactional annotation, Throwable exception) {
         for (Class<?> dontRollbackOnClass : annotation.dontRollbackOn()) {
             if (dontRollbackOnClass.isAssignableFrom(exception.getClass())) {
+                if (isReadOnly()) {
+                    return rollbackOnCancel();
+                }
                 LOG.trace("Avoid rollback due to `dontRollbackOn` on `@Transactional` annotation, committing instead");
                 return invokeBeforeCommitAndCommit(context);
             }
@@ -226,6 +236,9 @@ public abstract class TransactionalInterceptorBase {
                                     exception.getClass());
                             return actualRollback(connection.transaction(), exception);
                         } else {
+                            if (isReadOnly()) {
+                                return actualRollback(connection.transaction(), exception);
+                            }
                             LOG.tracef(
                                     "Do not rollback the transaction as the exception class %s is annotated with `@Rollback(false)` annotation",
                                     exception.getClass());
@@ -311,15 +324,20 @@ public abstract class TransactionalInterceptorBase {
     // TODO once Narayana implements Jakarta Transactions read-only, also check for
     //  @Transactional(readOnly = true) in addition to @ReadOnly.
     //  See https://github.com/jakartaee/transactions/pull/222
-    private static void rejectReadOnly(InvocationContext ic) {
+    private static boolean isReadOnly(InvocationContext ic) {
         ReadOnly readOnly = ic.getMethod().getAnnotation(ReadOnly.class);
-        if (readOnly == null) {
-            readOnly = ic.getMethod().getDeclaringClass().getAnnotation(ReadOnly.class);
-        }
         if (readOnly != null) {
-            throw new UnsupportedOperationException(
-                    "@ReadOnly is not yet supported on reactive transactions");
+            return true;
         }
+        return ic.getMethod().getDeclaringClass().getAnnotation(ReadOnly.class) != null;
+    }
+
+    public static boolean isReadOnly() {
+        Context context = Vertx.currentContext();
+        if (context == null) {
+            return false;
+        }
+        return ContextLocals.get(READ_ONLY_KEY).isPresent();
     }
 
     // Default impl fails .REQUIRED overrides it
