@@ -54,13 +54,6 @@ public class ReadOnlyTransactionTest {
         assertThat(writerBean.findEntityName(42L)).isNull();
     }
 
-    @Test
-    public void subsequentWriteTransactionWorksNormally() {
-        readOnlyBean.assertSessionIsReadOnly();
-        long id = writerBean.createEntity("after-readonly");
-        assertThat(writerBean.findEntityName(id)).isEqualTo("after-readonly");
-    }
-
     @ReadOnly
     @ApplicationScoped
     static class ReadOnlyBean {

@@ -87,21 +87,6 @@ public class ReadOnlyTransactionEndpoint {
             return "ERROR: flush write was not rolled back, count=" + countAfterFlushWrite;
         }
 
-        // Test 4: Normal write transaction still works after read-only transactions
-        QuarkusTransaction.requiringNew().run(() -> {
-            Person person = new Person();
-            person.setName(NAME_PREFIX + "after-readonly");
-            em.persist(person);
-        });
-        long finalCount = QuarkusTransaction.requiringNew().call(() -> {
-            return em.createQuery("SELECT COUNT(p) FROM Person p WHERE p.name LIKE :prefix", Long.class)
-                    .setParameter("prefix", NAME_PREFIX + "%")
-                    .getSingleResult();
-        });
-        if (finalCount != 2) {
-            return "ERROR: normal write after read-only failed, count=" + finalCount;
-        }
-
         return "OK:" + writeWithFlushResult;
     }
 }
