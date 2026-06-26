@@ -29,7 +29,7 @@ public class ReadOnlyTransactionTest {
     static final QuarkusExtensionTest config = new QuarkusExtensionTest()
             .withApplicationRoot((jar) -> jar
                     .addClasses(ReadOnlyBean.class, NonReadOnlyBean.class,
-                            TestXAResource.class, TxAssertionData.class));
+                            TestXAResource.class, TestXAResourceWrapper.class, TxAssertionData.class));
 
     @Inject
     TransactionManager tm;
@@ -42,6 +42,9 @@ public class ReadOnlyTransactionTest {
 
     @Inject
     NonReadOnlyBean nonReadOnlyBean;
+
+    @Inject
+    TransactionSynchronizationRegistry tsr;
 
     @Inject
     TxAssertionData txAssertionData;
@@ -116,10 +119,9 @@ public class ReadOnlyTransactionTest {
 
     @Test
     @ActivateRequestContext
-    public void programmaticReadOnlyJoiningExistingInsideNonReadOnly() {
-        var sync = new TestSync();
-        nonReadOnlyBean.runWithJoiningReadOnly(sync);
-        Assertions.assertEquals(Status.STATUS_ROLLEDBACK, sync.completionStatus);
+    public void programmaticReadOnlyJoiningExistingInsideNonReadOnlyThrows() {
+        Assertions.assertThrows(QuarkusTransactionException.class,
+                () -> nonReadOnlyBean.runWithJoiningReadOnly());
     }
 
     @Test
@@ -137,6 +139,50 @@ public class ReadOnlyTransactionTest {
         readOnlyBean.callNonReadOnlyJoining();
         Assertions.assertEquals(0, txAssertionData.getCommit());
         Assertions.assertEquals(1, txAssertionData.getRollback());
+    }
+
+    @Test
+    public void declarativeRequiresNewReadOnlyRollsBack() throws Exception {
+        readOnlyBean.doWorkRequiresNew();
+        Assertions.assertEquals(0, txAssertionData.getCommit());
+        Assertions.assertEquals(1, txAssertionData.getRollback());
+    }
+
+    @Test
+    public void programmaticReadOnlyWithEnforcingResourceStillRollsBack() {
+        var sync = new TestSync();
+        QuarkusTransaction.requiringNew().readOnly().run(() -> {
+            String dsName = "test-enforcing-ds";
+            ReadOnlyTransactionSynchronization.addReadOnlyEnforcingResource(tsr, dsName);
+            try {
+                tm.getTransaction().enlistResource(new TestXAResourceWrapper(txAssertionData, dsName));
+                tm.getTransaction().registerSynchronization(sync);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        Assertions.assertEquals(Status.STATUS_ROLLEDBACK, sync.completionStatus);
+    }
+
+    @Test
+    public void readOnlyWithEnforcingResourceCommits() throws Exception {
+        readOnlyBean.doWorkWithEnforcingResource();
+        Assertions.assertEquals(1, txAssertionData.getCommit());
+        Assertions.assertEquals(0, txAssertionData.getRollback());
+    }
+
+    @Test
+    public void readOnlyWithNonEnforcingResourceRollsBack() throws Exception {
+        readOnlyBean.doWork();
+        Assertions.assertEquals(0, txAssertionData.getCommit());
+        Assertions.assertEquals(1, txAssertionData.getRollback());
+    }
+
+    @Test
+    public void readOnlyWithMixedResourcesRollsBack() throws Exception {
+        readOnlyBean.doWorkWithMixedResources();
+        Assertions.assertEquals(0, txAssertionData.getCommit());
+        Assertions.assertEquals(2, txAssertionData.getRollback());
     }
 
     private void register(TestSync sync) {
@@ -182,6 +228,13 @@ public class ReadOnlyTransactionTest {
                     .enlistResource(new TestXAResource(txAssertionData));
         }
 
+        @Transactional(Transactional.TxType.REQUIRES_NEW)
+        @ReadOnly
+        public void doWorkRequiresNew() throws Exception {
+            transactionManager.getTransaction()
+                    .enlistResource(new TestXAResource(txAssertionData));
+        }
+
         @Transactional
         public void doWorkInherited() throws Exception {
             transactionManager.getTransaction()
@@ -192,6 +245,26 @@ public class ReadOnlyTransactionTest {
         @ReadOnly
         public void assertReadOnlyFlagSet() {
             Assertions.assertTrue(ReadOnlyTransactionSynchronization.isReadOnly(tsr));
+        }
+
+        @Transactional
+        @ReadOnly
+        public void doWorkWithEnforcingResource() throws Exception {
+            String dsName = "test-enforcing-ds";
+            ReadOnlyTransactionSynchronization.addReadOnlyEnforcingResource(tsr, dsName);
+            transactionManager.getTransaction()
+                    .enlistResource(new TestXAResourceWrapper(txAssertionData, dsName));
+        }
+
+        @Transactional
+        @ReadOnly
+        public void doWorkWithMixedResources() throws Exception {
+            String dsName = "test-enforcing-ds";
+            ReadOnlyTransactionSynchronization.addReadOnlyEnforcingResource(tsr, dsName);
+            transactionManager.getTransaction()
+                    .enlistResource(new TestXAResourceWrapper(txAssertionData, dsName));
+            transactionManager.getTransaction()
+                    .enlistResource(new TestXAResource(txAssertionData));
         }
 
         @Transactional
@@ -220,12 +293,7 @@ public class ReadOnlyTransactionTest {
         }
 
         @Transactional
-        public void runWithJoiningReadOnly(TestSync sync) {
-            try {
-                transactionManager.getTransaction().registerSynchronization(sync);
-            } catch (RollbackException | SystemException e) {
-                throw new RuntimeException(e);
-            }
+        public void runWithJoiningReadOnly() {
             QuarkusTransaction.joiningExisting().readOnly().run(() -> {
             });
         }

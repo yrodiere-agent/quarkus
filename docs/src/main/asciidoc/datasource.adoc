@@ -680,6 +680,7 @@ To also trace connection acquisition, enable it explicitly:
 quarkus.datasource.jdbc.telemetry.trace-connection=true
 ----
 
+[[narayana-transaction-manager-integration]]
 === Narayana transaction manager integration
 
 Integration is automatic if the Narayana JTA extension is also available.
@@ -701,6 +702,16 @@ Incorrect configuration can lead to data loss, data unavailability, or both, due
 
 For more information, see the <<configuration-reference,Configuration reference>> section below.
 To facilitate the storage of transaction logs in a database by using JDBC, see the xref:transaction.adoc#jdbcstore[Configuring transaction logs to be stored in a datasource] section of the xref:transaction.adoc[Using transactions in Quarkus] guide.
+
+When using xref:transaction.adoc#read-only-transactions[read-only transactions], the JDBC connection is automatically set to read-only mode (`Connection.setReadOnly(true)`) for the duration of the transaction.
+Depending on the driver and database, this can enable client-side or server-side optimizations.
+
+[NOTE]
+====
+Read-only transactions are guaranteed not to write to the database.
+
+Behavior if your application does attempt to write (e.g. by issuing an `INSERT`) depends on the database and JDBC driver: the write may simply be ignored, or it may trigger an exception.
+====
 
 [[in-memory-databases]]
 === Testing with in-memory databases
