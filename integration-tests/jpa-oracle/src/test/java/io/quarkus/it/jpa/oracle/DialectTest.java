@@ -14,9 +14,9 @@ import io.restassured.RestAssured;
 public class DialectTest {
 
     private static String getExpectedVersion() {
-        String version = System.getProperty("oracle.version");
+        String version = System.getProperty("oracle.default.version");
         assertThat(version)
-                .as("oracle.version system property should be set by maven-surefire-plugin")
+                .as("oracle.default.version system property should be set by maven-surefire-plugin")
                 .isNotNull();
         return version;
     }
