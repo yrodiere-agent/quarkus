@@ -51,9 +51,11 @@ import io.quarkus.arc.deployment.ContextRegistrationPhaseBuildItem.ContextConfig
 import io.quarkus.arc.deployment.CustomScopeBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
+import io.quarkus.arc.deployment.InterceptorBindingRegistrarBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeansRuntimeInitBuildItem;
 import io.quarkus.arc.deployment.TransformedAnnotationsBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.arc.processor.InterceptorBindingRegistrar;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
@@ -273,6 +275,16 @@ class NarayanaJtaProcessor {
     @BuildStep
     void logCleanupFilters(BuildProducer<LogCleanupFilterBuildItem> logCleanupFilters) {
         logCleanupFilters.produce(new LogCleanupFilterBuildItem("com.arjuna.ats.jbossatx", "ARJUNA032010:", "ARJUNA032013:"));
+    }
+
+    @BuildStep
+    InterceptorBindingRegistrarBuildItem registerReadOnlyAsInterceptorBinding() {
+        return new InterceptorBindingRegistrarBuildItem(new InterceptorBindingRegistrar() {
+            @Override
+            public List<InterceptorBinding> getAdditionalBindings() {
+                return List.of(InterceptorBinding.of(READ_ONLY));
+            }
+        });
     }
 
     @BuildStep

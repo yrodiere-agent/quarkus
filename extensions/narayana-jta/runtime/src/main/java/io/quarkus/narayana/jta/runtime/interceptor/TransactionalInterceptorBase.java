@@ -143,18 +143,15 @@ public abstract class TransactionalInterceptorBase implements Serializable {
     // TODO replace with @Transactional(readOnly = true) once Jakarta Transactions adds the readOnly attribute
     //  and Narayana implements it. See https://github.com/jakartaee/transactions/pull/222
     private boolean isReadOnly(InvocationContext ic) {
-        ReadOnly readOnly = ic.getMethod().getAnnotation(ReadOnly.class);
-        if (readOnly != null) {
-            return true;
+        // @ReadOnly is registered as an interceptor binding at build time,
+        // so it is available through getInterceptorBindings() — even when added by an annotation transformer
+        // (e.g. from Spring @Transactional(readOnly = true)).
+        for (Annotation annotation : InterceptorBindings.getInterceptorBindings(ic)) {
+            if (annotation.annotationType().equals(ReadOnly.class)) {
+                return true;
+            }
         }
-        Class<?> clazz;
-        Object target = ic.getTarget();
-        if (target != null) {
-            clazz = target.getClass();
-        } else {
-            clazz = ic.getMethod().getDeclaringClass();
-        }
-        return clazz.getAnnotation(ReadOnly.class) != null;
+        return false;
     }
 
     protected Object invokeInOurTx(InvocationContext ic, TransactionManager tm) throws Exception {

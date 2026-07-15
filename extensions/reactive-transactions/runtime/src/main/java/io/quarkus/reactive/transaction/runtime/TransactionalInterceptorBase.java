@@ -325,11 +325,15 @@ public abstract class TransactionalInterceptorBase {
     //  @Transactional(readOnly = true) in addition to @ReadOnly.
     //  See https://github.com/jakartaee/transactions/pull/222
     private static boolean isReadOnly(InvocationContext ic) {
-        ReadOnly readOnly = ic.getMethod().getAnnotation(ReadOnly.class);
-        if (readOnly != null) {
-            return true;
+        // @ReadOnly is registered as an interceptor binding at build time,
+        // so it is available through getInterceptorBindings() — even when added by an annotation transformer
+        // (e.g. from Spring @Transactional(readOnly = true)).
+        for (Annotation annotation : ic.getInterceptorBindings()) {
+            if (annotation.annotationType().equals(ReadOnly.class)) {
+                return true;
+            }
         }
-        return ic.getMethod().getDeclaringClass().getAnnotation(ReadOnly.class) != null;
+        return false;
     }
 
     public static boolean isReadOnly() {
