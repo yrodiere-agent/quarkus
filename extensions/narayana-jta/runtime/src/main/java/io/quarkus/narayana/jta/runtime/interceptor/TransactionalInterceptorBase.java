@@ -492,8 +492,11 @@ public abstract class TransactionalInterceptorBase implements Serializable {
             // TODO once Narayana implements Jakarta Transactions read-only, replace
             //  ReadOnlyTransactionSynchronization.isReadOnly(...) with tsr.isReadOnly() or tx.isReadOnly().
             //  See https://github.com/jakartaee/transactions/pull/222
-            if (tx.getStatus() == Status.STATUS_MARKED_ROLLBACK
-                    || ReadOnlyTransactionSynchronization.isReadOnly(transactionSynchronizationRegistry)) {
+            if (tx.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
+                tm.rollback();
+            } else if (ReadOnlyTransactionSynchronization.shouldCommitReadOnly(transactionSynchronizationRegistry, tx)) {
+                tm.commit();
+            } else if (ReadOnlyTransactionSynchronization.isReadOnly(transactionSynchronizationRegistry)) {
                 tm.rollback();
             } else {
                 tm.commit();

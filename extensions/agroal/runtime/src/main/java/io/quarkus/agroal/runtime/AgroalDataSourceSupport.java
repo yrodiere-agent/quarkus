@@ -21,15 +21,17 @@ public class AgroalDataSourceSupport {
         public final Optional<String> dbVersion;
         public final String resolvedDriverClass;
         public final boolean isDefault;
+        public final boolean readOnlyEnforced;
 
         public Entry(String dataSourceName, String resolvedDbKind, Optional<String> dbVersion,
                 String resolvedDriverClass,
-                boolean isDefault) {
+                boolean isDefault, boolean readOnlyEnforced) {
             this.dataSourceName = dataSourceName;
             this.resolvedDbKind = resolvedDbKind;
             this.dbVersion = dbVersion;
             this.resolvedDriverClass = resolvedDriverClass;
             this.isDefault = isDefault;
+            this.readOnlyEnforced = readOnlyEnforced;
         }
     }
 }

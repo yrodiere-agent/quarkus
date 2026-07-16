@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.agroal.api.AgroalDataSource;
-import io.quarkus.agroal.runtime.ReadOnlyTransactionConnectionInterceptor;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.QuarkusExtensionTest;
 
@@ -22,8 +21,7 @@ public class ReadOnlyTransactionConnectionResetTest {
     @RegisterExtension
     static final QuarkusExtensionTest config = new QuarkusExtensionTest()
             .withApplicationRoot((jar) -> jar
-                    .addClasses(ReadOnlyTransactionConnectionResetTest.class,
-                            ReadOnlyTransactionConnectionInterceptor.class))
+                    .addClasses(ReadOnlyTransactionConnectionResetTest.class))
             .withConfigurationResource("base.properties")
             .overrideConfigKey("quarkus.datasource.jdbc.max-size", "1");
 
