@@ -26,7 +26,12 @@ import io.quarkus.test.junit.QuarkusTest;
 public class HibernateOrmNoWarningsTest {
     @Test
     public void testNoWarningsOnStartup() {
-        assertThat(LogCollectingTestResource.current().getRecords())
+        assertThat(LogCollectingTestResource.current().getRecords()
+                // Ignore warnings about dropping non-existent schemas.
+                // Hibernate ORM does not use "DROP SCHEMA IF EXISTS" for PostgreSQL,
+                // so drop-and-create with create-schemas=true causes harmless warnings on first run.
+                // See https://github.com/quarkusio/quarkus/issues/25825
+                .stream().filter(r -> !r.getMessage().contains("drop schema myschema")))
                 // There shouldn't be any warning or error
                 .as("Startup logs (warning or higher)")
                 .extracting(LogCollectingTestResource::format)
