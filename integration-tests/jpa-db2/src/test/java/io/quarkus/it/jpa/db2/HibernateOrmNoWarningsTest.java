@@ -26,7 +26,14 @@ import io.quarkus.test.junit.QuarkusTest;
 public class HibernateOrmNoWarningsTest {
     @Test
     public void testNoWarningsOnStartup() {
-        assertThat(LogCollectingTestResource.current().getRecords())
+        assertThat(LogCollectingTestResource.current().getRecords()
+                // Ignore warnings about dropping non-existent sequences.
+                // Hibernate ORM does not use "DROP SEQUENCE IF EXISTS" for DB2,
+                // so drop-and-create causes harmless warnings on first run.
+                .stream().filter(r -> {
+                    String msg = LogCollectingTestResource.format(r);
+                    return !msg.contains("drop sequence") || !msg.contains("SQLSTATE=42704");
+                }))
                 // There shouldn't be any warning or error
                 .as("Startup logs (warning or higher)")
                 .extracting(LogCollectingTestResource::format)

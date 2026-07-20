@@ -26,7 +26,14 @@ import io.quarkus.test.junit.QuarkusTest;
 public class HibernateOrmNoWarningsTest {
     @Test
     public void testNoWarningsOnStartup() {
-        assertThat(LogCollectingTestResource.current().getRecords())
+        assertThat(LogCollectingTestResource.current().getRecords()
+                // Ignore warnings about dropping foreign keys on non-existent tables.
+                // Hibernate ORM uses "ALTER TABLE ... DROP FOREIGN KEY",
+                // but that fails when the table itself does not exist.
+                .stream().filter(r -> {
+                    String msg = LogCollectingTestResource.format(r);
+                    return !msg.contains("drop foreign key") || !msg.contains("doesn't exist");
+                }))
                 // There shouldn't be any warning or error
                 .as("Startup logs (warning or higher)")
                 .extracting(LogCollectingTestResource::format)

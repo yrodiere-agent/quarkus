@@ -26,7 +26,14 @@ import io.quarkus.test.junit.QuarkusTest;
 public class HibernateOrmNoWarningsTest {
     @Test
     public void testNoWarningsOnStartup() {
-        assertThat(LogCollectingTestResource.current().getRecords())
+        assertThat(LogCollectingTestResource.current().getRecords()
+                // Ignore warnings about dropping constraints on non-existent tables.
+                // Hibernate ORM uses "ALTER TABLE ... DROP CONSTRAINT IF EXISTS",
+                // but that fails when the table itself does not exist.
+                .stream().filter(r -> {
+                    String msg = LogCollectingTestResource.format(r);
+                    return !msg.contains("drop constraint") || !msg.contains("does not exist");
+                }))
                 // There shouldn't be any warning or error
                 .as("Startup logs (warning or higher)")
                 .extracting(LogCollectingTestResource::format)

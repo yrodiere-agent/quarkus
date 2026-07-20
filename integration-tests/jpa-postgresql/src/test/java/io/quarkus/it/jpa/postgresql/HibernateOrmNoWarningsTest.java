@@ -31,8 +31,10 @@ public class HibernateOrmNoWarningsTest {
                 // Hibernate ORM does not use "DROP SCHEMA IF EXISTS" for PostgreSQL,
                 // so drop-and-create with create-schemas=true causes harmless warnings on first run.
                 // See https://github.com/quarkusio/quarkus/issues/25825
-                .stream().filter(r -> !r.getMessage().contains("drop schema myschema")
-                        || !r.getMessage().contains("does not exist")))
+                .stream().filter(r -> {
+                    String msg = LogCollectingTestResource.format(r);
+                    return !msg.contains("drop schema") || !msg.contains("does not exist");
+                }))
                 // There shouldn't be any warning or error
                 .as("Startup logs (warning or higher)")
                 .extracting(LogCollectingTestResource::format)
