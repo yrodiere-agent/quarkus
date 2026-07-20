@@ -13,11 +13,7 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.UserTransaction;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.MediaType;
-
-import io.agroal.api.AgroalDataSource;
 
 @Path("/datasource")
 public class DatasourceResource {
@@ -73,16 +69,6 @@ public class DatasourceResource {
                 }
             }
         }
-    }
-
-    @GET
-    @Path("/url")
-    @Produces(MediaType.TEXT_PLAIN)
-    public String jdbcUrl() {
-        return ((AgroalDataSource) dataSource).getConfiguration()
-                .connectionPoolConfiguration()
-                .connectionFactoryConfiguration()
-                .jdbcUrl();
     }
 
     @GET
