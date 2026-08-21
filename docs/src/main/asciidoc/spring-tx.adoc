@@ -148,10 +148,16 @@ public class FruitService {
             fruitRepository.save(new Fruit(name));
         }
     }
+
+    @Transactional(readOnly = true) // <3>
+    public List<Fruit> listFruits() {
+        return (List<Fruit>) fruitRepository.findAll();
+    }
 }
 ----
 <1> The Spring `@Transactional` annotation is automatically transformed into a Jakarta `@Transactional` annotation at build time.
 <2> You can specify propagation attributes just like in Spring. `REQUIRED` is the default.
+<3> `readOnly = true` enables xref:transaction.adoc#read-only-transactions[read-only transaction] optimizations.
 
 You can also place `@Transactional` at the class level to make all public methods transactional:
 
@@ -304,8 +310,8 @@ The table below summarizes the supported attributes:
 |
 
 |`readOnly`
-|Unsupported
-|Ignored with a warning
+|Supported
+|Transformed into `@io.quarkus.transaction.annotations.ReadOnly`. See xref:transaction.adoc#read-only-transactions[read-only transactions].
 
 |`timeout` / `timeoutString`
 |Unsupported

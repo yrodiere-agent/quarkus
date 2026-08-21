@@ -1,6 +1,7 @@
 package io.quarkus.hibernate.reactive.runtime.transaction;
 
 import static io.quarkus.reactive.transaction.runtime.TransactionalInterceptorBase.PERSISTENCE_UNIT_NAME_KEY;
+import static io.quarkus.reactive.transaction.runtime.TransactionalInterceptorBase.READ_ONLY_KEY;
 import static io.quarkus.reactive.transaction.runtime.TransactionalInterceptorBase.TRANSACTIONAL_METHOD_KEY;
 
 import java.util.Optional;
@@ -26,9 +27,13 @@ public class HibernateActionsStrategy implements ReactiveResource {
     /**
      * Flush all opened sessions. This must be called before commit/rollback
      * so that dirty state is written to the DB within the open transaction.
+     * Skipped for read-only transactions since no writes should happen.
      */
     @Override
     public Uni<Void> beforeCommit(Context context) {
+        if (ContextLocals.get(READ_ONLY_KEY).isPresent()) {
+            return Uni.createFrom().voidItem();
+        }
         Optional<String> optPersistenceUnitName = getPersistenceUnitName(context);
         return optPersistenceUnitName.map(persistenceUnitName -> Uni.combine().all().unis(
                 HibernateReactiveRecorder.OPENED_SESSIONS_STATE.flushSession(context, persistenceUnitName),
@@ -51,6 +56,7 @@ public class HibernateActionsStrategy implements ReactiveResource {
                     // We want to make sure that we clear the state after the closing (and after the flushing) as well
                     ContextLocals.remove(TRANSACTIONAL_METHOD_KEY);
                     ContextLocals.remove(PERSISTENCE_UNIT_NAME_KEY);
+                    ContextLocals.remove(READ_ONLY_KEY);
                 });
 
     }

@@ -173,6 +173,8 @@ public class Code {
 ----
 <1> This is required on any method which interacts with the database, in order to run the operations in a transaction.
 
+TIP: For methods that only read data, you can use xref:transaction.adoc#read-only-transactions[read-only transactions] by adding `@io.quarkus.transaction.annotations.ReadOnly` alongside `@Transactional`.
+
 == Our first repository
 
 Now that we know how to create, update and delete our entities, let's see how we can query our database to find them,

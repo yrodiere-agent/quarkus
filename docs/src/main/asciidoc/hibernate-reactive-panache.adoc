@@ -792,6 +792,8 @@ If you have multiple persistence units, you can specify which one to use by prov
 NOTE: Note that a Panache entity may not be used from a blocking thread. See also xref:getting-started-reactive.adoc[Getting Started With Reactive] guide that explains the basics of reactive principles in Quarkus.
 
 Also make sure to wrap methods that modify the database or involve multiple queries (e.g. `entity.persist()`) within a transaction.
+For methods that only read data, you can use xref:transaction.adoc#read-only-transactions[read-only transactions] by adding `@io.quarkus.transaction.annotations.ReadOnly` alongside `@Transactional`.
+This sets the Hibernate Reactive session to read-only mode and skips flushing.
 
 You can annotate the method with `@jakarta.transaction.Transactional` as you would in Hibernate ORM to specify declarative transaction management.
 

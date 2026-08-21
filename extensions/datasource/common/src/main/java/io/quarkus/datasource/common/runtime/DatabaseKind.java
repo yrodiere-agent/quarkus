@@ -80,6 +80,15 @@ public final class DatabaseKind {
         return is(value, POSTGRESQL);
     }
 
+    /**
+     * Whether the given database kind enforces read-only mode at the database level
+     * when {@link java.sql.Connection#setReadOnly(boolean) Connection.setReadOnly(true)} is called.
+     */
+    public static boolean isReadOnlyEnforced(String dbKind) {
+        return isPostgreSQL(dbKind) || isMySQL(dbKind)
+                || isMariaDB(dbKind) || isOracle(dbKind);
+    }
+
     public static boolean is(String value, String mainName) {
         if (value == null) {
             return false;

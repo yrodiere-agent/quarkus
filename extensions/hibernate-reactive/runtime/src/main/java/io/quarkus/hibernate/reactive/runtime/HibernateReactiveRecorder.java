@@ -1,6 +1,7 @@
 package io.quarkus.hibernate.reactive.runtime;
 
 import static io.quarkus.reactive.transaction.runtime.TransactionalInterceptorBase.PERSISTENCE_UNIT_NAME_KEY;
+import static io.quarkus.reactive.transaction.runtime.TransactionalInterceptorBase.READ_ONLY_KEY;
 import static io.quarkus.reactive.transaction.runtime.TransactionalInterceptorBase.TRANSACTIONAL_METHOD_KEY;
 
 import java.util.List;
@@ -144,7 +145,12 @@ public class HibernateReactiveRecorder {
             // Store the persistence unit name so that we can close only this session at the end of the interceptor
             ContextLocals.put(PERSISTENCE_UNIT_NAME_KEY, persistenceUnitName);
             LOG.debugf("Opening lazy session for Persistence Unit '%s'", persistenceUnitName);
-            return OPENED_SESSIONS_STATE.createNewSession(persistenceUnitName, context);
+            Mutiny.Session newSession = OPENED_SESSIONS_STATE.createNewSession(persistenceUnitName, context);
+            if (ContextLocals.get(READ_ONLY_KEY).isPresent()) {
+                newSession.setDefaultReadOnly(true);
+                newSession.setFlushMode(org.hibernate.FlushMode.MANUAL);
+            }
+            return newSession;
         }
     }
 

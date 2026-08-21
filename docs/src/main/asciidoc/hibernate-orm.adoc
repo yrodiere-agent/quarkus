@@ -165,6 +165,13 @@ WARNING: Make sure to wrap methods modifying your database (e.g. `entity.persist
 CDI bean method `@Transactional` will do that for you and make that method a transaction boundary. We recommend doing
 so at your application entry point boundaries like your REST endpoint controllers.
 
+[TIP]
+====
+For queries that only read data, you can use xref:transaction.adoc#read-only-transactions[read-only transactions] by adding the `@io.quarkus.transaction.annotations.ReadOnly` annotation alongside `@Transactional`.
+
+In a read-only transaction, Hibernate ORM automatically applies some optimizations, such as disabling dirty checking or flushes, on top of xref:datasource.adoc#narayana-transaction-manager-integration[optimizations applied at the datasource level].
+====
+
 [[hibernate-dialect]]
 === Dialect
 
