@@ -43,6 +43,7 @@ import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
+import io.quarkus.datasource.common.runtime.DatabaseKind;
 import io.quarkus.datasource.deployment.spi.DefaultDataSourceDbKindBuildItem;
 import io.quarkus.datasource.deployment.spi.DefaultDataSourceDbVersionBuildItem;
 import io.quarkus.datasource.runtime.DataSourceBuildTimeConfig;
@@ -206,7 +207,8 @@ class AgroalProcessor {
                     new AgroalDataSourceSupport.Entry(dataSourceName, aggregatedDataSourceBuildTimeConfig.getDbKind(),
                             aggregatedDataSourceBuildTimeConfig.getDataSourceConfig().dbVersion(),
                             aggregatedDataSourceBuildTimeConfig.getResolvedDriverClass(),
-                            aggregatedDataSourceBuildTimeConfig.isDefault()));
+                            aggregatedDataSourceBuildTimeConfig.isDefault(),
+                            DatabaseKind.isReadOnlyEnforced(aggregatedDataSourceBuildTimeConfig.getDbKind())));
         }
 
         return new AgroalDataSourceSupport(sslNativeConfig.isExplicitlyDisabled(),

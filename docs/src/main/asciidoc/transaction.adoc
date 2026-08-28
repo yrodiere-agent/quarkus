@@ -133,6 +133,43 @@ Annotated nested methods once a transaction has started will throw an exception.
 If defined on a class, it is equivalent to defining it on all the methods of the class marked with `@Transactional`.
 The configuration defined on a method takes precedence over the configuration defined on a class.
 
+[[read-only-transactions]]
+=== Read-only transactions
+
+You can mark a transaction as read-only by adding the `@io.quarkus.transaction.annotations.ReadOnly` annotation alongside `@Transactional`:
+
+[source,java]
+----
+import jakarta.transaction.Transactional;
+
+import io.quarkus.transaction.annotations.ReadOnly;
+
+@Transactional
+@ReadOnly
+public List<Gift> listGifts() {
+    return Gift.listAll();
+}
+----
+
+A read-only transaction has the following effects:
+
+* The JDBC connection is set to read-only mode (`Connection.setReadOnly(true)`).
+Depending on the JDBC driver this may enable server-side optimizations: for example, PostgreSQL uses `BEGIN READ ONLY` to enforce read-only access at the transaction level, and MySQL sends `SET SESSION TRANSACTION READ ONLY`.
+* If Hibernate ORM is used, the session is configured with `defaultReadOnly = true` and `FlushMode.MANUAL`, disabling dirty checking and automatic flushing.
+* If Hibernate Reactive is used, the session is configured with `defaultReadOnly = true` and `FlushMode.MANUAL`, disabling dirty checking and automatic flushing.
+* When the JDBC driver enforces read-only mode at the database level (PostgreSQL, MySQL, MariaDB, Oracle), the transaction is committed normally.
+This allows Hibernate ORM to populate its second-level cache and transaction synchronization listeners to observe a committed status.
+* When the JDBC driver does not enforce read-only mode (MSSQL, H2, and others), or when non-JDBC resources are enlisted, the transaction is rolled back as a safety net.
+* Reactive transactions (Vert.x SQL Client) are always rolled back, since the reactive driver API does not support read-only enforcement.
+
+NOTE: The adaptive commit/rollback behavior described above applies to declarative transactions (`@Transactional @ReadOnly`).
+The programmatic API (`QuarkusTransaction.requiringNew().readOnly()`) currently always rolls back read-only transactions regardless of driver enforcement.
+Calling `QuarkusTransaction.commit()` on a read-only transaction also results in a rollback.
+
+Like `@TransactionConfiguration`, the `@ReadOnly` annotation can be placed on the method delineating the transaction boundary, or on the class to apply to all `@Transactional` methods of that class.
+
+NOTE: `@ReadOnly` is a temporary annotation. It will be replaced by `@Transactional(readOnly = true)` once a future version of the Jakarta Transactions specification adds the `readOnly` attribute.
+
 === Reactive extensions
 
 If your `@Transactional`-annotated method returns a reactive value, such as:
@@ -195,6 +232,21 @@ public class TransactionExample {
                     //do work
                     return 0;
                 });
+    }
+
+    public void readOnlyExample() {
+        // Functional approach
+        QuarkusTransaction.requiringNew()
+                .readOnly()
+                .run(() -> {
+                    //do read-only work
+                });
+
+        // Begin/commit approach
+        QuarkusTransaction.begin(QuarkusTransaction.beginOptions()
+                .readOnly());
+        //do read-only work
+        QuarkusTransaction.rollback();
     }
 }
 ----
@@ -487,16 +539,19 @@ Let's assume it essentially comes for free and let you scale to more complex cas
 
 I don't need transaction when I do read only operations, it's faster.::
 
-Wrong. +
-First off, just disable the transaction by marking your transaction boundary with `@Transactional(NOT_SUPPORTED)` (or `NEVER` or `SUPPORTS` depending on the semantic you want). +
-Second, it's again fairy tale that not using transaction is faster.
-The answer is, it depends on your DB and how many SQL SELECTs you are making.
-No transaction means the DB does have a single operation transaction context anyway. +
-Third, when you do several SELECTs, it's better to wrap them in a single transaction because they will all be consistent with one another.
+It depends on your DB and how many SQL SELECTs you are making. +
++
+When your operation involves several SELECTs, it's better to wrap them in a single transaction because they will all be consistent with one another.
 Say your DB represents your car dashboard, you can see the number of kilometers remaining and the fuel gauge level.
 By reading it in one transaction, they will be consistent.
 If you read one and the other from two different transactions, then they can be inconsistent.
-It can be more dramatic if you read data related to rights and access management for example.
+It can be more dramatic if you read data related to rights and access management for example. +
++
+When your operation involves a single SELECT in a single datasource, then depending on your DB, an explicit transaction might indeed have a cost: the cost of the additional DB roundtrip to explicitly commit the transaction. +
+Whether that cost is significant will depend on your DB and requirements. You should carefully consider whether a performance boost is worth the risk of unknowingly ending up with inconsistent operations (see above) when one day you introduce another SQL statement in the same operation. +
+If the performance boost is not worth taking that risk, you should consider xref:transaction.adoc#read-only-transactions[read-only transactions], which give you transactional consistency while signaling the driver that no writes are expected, which can enable client-side and server-side optimizations.
++
+If the performance boost _is_ worth taking that risk, then as a last resort you can just disable the transaction by marking your transaction boundary with `@Transactional(NOT_SUPPORTED)` (or `NEVER` or `SUPPORTS` depending on the semantic you want).
 
 Why do you prefer JTA vs Hibernate's transaction management API::
 
