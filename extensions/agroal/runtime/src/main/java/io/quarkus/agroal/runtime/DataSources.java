@@ -2,12 +2,12 @@ package io.quarkus.agroal.runtime;
 
 import java.sql.Driver;
 import java.time.Duration;
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
@@ -232,12 +232,13 @@ public class DataSources {
                 agroalConfiguration.connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
 
         // Set pool interceptors for this datasource
-        Collection<AgroalPoolInterceptor> interceptorList = agroalPoolInterceptors
+        List<AgroalPoolInterceptor> interceptorList = new ArrayList<>();
+        interceptorList.add(new ReadOnlyTransactionConnectionInterceptor(
+                transactionSynchronizationRegistry, dataSourceName, matchingSupportEntry.readOnlyEnforced));
+        agroalPoolInterceptors
                 .select(AgroalDataSourceUtil.qualifier(dataSourceName))
-                .stream().collect(Collectors.toList());
-        if (!interceptorList.isEmpty()) {
-            dataSource.setPoolInterceptors(interceptorList);
-        }
+                .forEach(interceptorList::add);
+        dataSource.setPoolInterceptors(interceptorList);
 
         if (dataSourceJdbcBuildTimeConfig.telemetry() &&
                 dataSourceJdbcRuntimeConfig.telemetry().enabled().orElse(true) &&
@@ -271,8 +272,11 @@ public class DataSources {
         }
 
         if (dataSourceJdbcBuildTimeConfig.transactions() != io.quarkus.agroal.runtime.TransactionIntegration.DISABLED) {
+            // dataSourceName is passed as the "jndiName" parameter — Agroal propagates it to XA resources
+            // (XAResourceWrapper.getJndiName()), which we use as a datasource identifier for read-only
+            // transaction commit/rollback decisions. It is not used for actual JNDI lookup.
             TransactionIntegration txIntegration = new NarayanaTransactionIntegration(transactionManager,
-                    transactionSynchronizationRegistry, null, false,
+                    transactionSynchronizationRegistry, dataSourceName, false,
                     dataSourceJdbcBuildTimeConfig.transactions() == io.quarkus.agroal.runtime.TransactionIntegration.XA
                             && transactionRuntimeConfig.enableRecovery().orElse(true)
                                     ? xaResourceRecoveryRegistry

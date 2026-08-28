@@ -11,6 +11,7 @@ import java.util.function.Function;
 class RunOptionsBase {
     TransactionSemantics semantics = TransactionSemantics.REQUIRE_NEW;
     int timeout = 0;
+    boolean readOnly = false;
     Function<Throwable, TransactionExceptionResult> exceptionHandler;
 
     RunOptionsBase setTimeout(int seconds) {
@@ -23,6 +24,11 @@ class RunOptionsBase {
 
     RunOptionsBase setSemantics(TransactionSemantics semantics) {
         this.semantics = semantics;
+        return this;
+    }
+
+    RunOptionsBase setReadOnly(boolean readOnly) {
+        this.readOnly = readOnly;
         return this;
     }
 
