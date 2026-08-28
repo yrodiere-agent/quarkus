@@ -1043,6 +1043,9 @@ Make sure to wrap methods modifying your database (e.g. `entity.persist()`) with
 CDI bean method `@Transactional` will do that for you and make that method a transaction boundary. We recommend doing
 so at your application entry point boundaries like your REST endpoint controllers.
 
+For methods that only read data, you can use xref:transaction.adoc#read-only-transactions[read-only transactions] by adding `@io.quarkus.transaction.annotations.ReadOnly` alongside `@Transactional`.
+This disables dirty checking and automatic flushing in Hibernate ORM, and sets the JDBC connection to read-only mode for potential server-side optimizations.
+
 Hibernate ORM batches changes you make to your entities and sends changes (it is called flush) at the end of the transaction or before a query.
 This is usually a good thing as it is more efficient.
 But if you want to check optimistic locking failures, do object validation right away or generally want to get immediate feedback, you can force the flush operation by calling `entity.flush()` or even use `entity.persistAndFlush()` to make it a single method call. This will allow you to catch any `PersistenceException` that could occur when Hibernate ORM sends those changes to the database.

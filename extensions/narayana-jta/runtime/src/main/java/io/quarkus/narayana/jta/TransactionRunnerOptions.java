@@ -28,6 +28,16 @@ public interface TransactionRunnerOptions extends TransactionRunner {
     TransactionRunnerOptions timeout(int seconds);
 
     /**
+     * Marks transactions created by this runner as read-only.
+     * <p>
+     * Read-only transactions enable optimizations such as setting the JDBC connection to read-only mode
+     * and configuring the Hibernate ORM session with {@code defaultReadOnly = true} and {@code FlushMode.MANUAL}.
+     *
+     * @return This builder
+     */
+    TransactionRunnerOptions readOnly();
+
+    /**
      * Provides an exception handler that can make a decision to rollback or commit based on the type of exception. If the
      * predicate returns {@link TransactionExceptionResult#ROLLBACK} the transaction is rolled back,
      * otherwise it is committed.

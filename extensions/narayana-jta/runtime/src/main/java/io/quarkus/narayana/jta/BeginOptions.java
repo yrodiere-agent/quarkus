@@ -8,6 +8,7 @@ public class BeginOptions {
 
     boolean commitOnRequestScopeEnd;
     int timeout = 0;
+    boolean readOnly = false;
 
     /**
      * If this method is called the transaction will be automatically committed when the request scope is destroyed, instead of
@@ -18,6 +19,19 @@ public class BeginOptions {
      */
     public BeginOptions commitOnRequestScopeEnd() {
         commitOnRequestScopeEnd = true;
+        return this;
+    }
+
+    /**
+     * Marks the transaction as read-only.
+     * <p>
+     * Read-only transactions enable optimizations such as setting the JDBC connection to read-only mode
+     * and configuring the Hibernate ORM session with {@code defaultReadOnly = true} and {@code FlushMode.MANUAL}.
+     *
+     * @return This builder
+     */
+    public BeginOptions readOnly() {
+        this.readOnly = true;
         return this;
     }
 

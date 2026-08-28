@@ -16,6 +16,12 @@ class TransactionRunnerImpl extends RunOptionsBase
     }
 
     @Override
+    public TransactionRunnerImpl readOnly() {
+        setReadOnly(true);
+        return this;
+    }
+
+    @Override
     public TransactionRunnerImpl exceptionHandler(Function<Throwable, TransactionExceptionResult> handler) {
         setExceptionHandler(handler);
         return this;

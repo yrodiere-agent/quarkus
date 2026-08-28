@@ -26,6 +26,8 @@ public class SpringTransactionalAnnotationsTransformer implements AnnotationsTra
             .createSimple("jakarta.transaction.Transactional");
     private static final DotName TX_TYPE = DotName
             .createSimple("jakarta.transaction.Transactional$TxType");
+    private static final DotName READ_ONLY = DotName
+            .createSimple("io.quarkus.transaction.annotations.ReadOnly");
 
     private static final Set<String> SUPPORTED_PROPAGATIONS = Set.of(
             "REQUIRES_NEW", "SUPPORTS", "MANDATORY", "NEVER", "NOT_SUPPORTED");
@@ -46,9 +48,14 @@ public class SpringTransactionalAnnotationsTransformer implements AnnotationsTra
                 jakartaValues);
         warnOnUnsupportedAttributes(springTransactional, context.getTarget());
 
-        context.transform()
-                .add(JAKARTA_TRANSACTIONAL, jakartaValues.toArray(new AnnotationValue[0]))
-                .done();
+        var transformation = context.transform()
+                .add(JAKARTA_TRANSACTIONAL, jakartaValues.toArray(new AnnotationValue[0]));
+
+        if (isReadOnly(springTransactional)) {
+            transformation.add(READ_ONLY);
+        }
+
+        transformation.done();
     }
 
     private AnnotationInstance findSpringTransactional(TransformationContext context) {
@@ -104,9 +111,12 @@ public class SpringTransactionalAnnotationsTransformer implements AnnotationsTra
         }
     }
 
+    private static boolean isReadOnly(AnnotationInstance springTransactional) {
+        AnnotationValue value = springTransactional.value("readOnly");
+        return value != null && value.asBoolean();
+    }
+
     private void warnOnUnsupportedAttributes(AnnotationInstance springTransactional, AnnotationTarget target) {
-        warnIfSet(springTransactional, target, "readOnly",
-                v -> v.asBoolean());
         warnIfSet(springTransactional, target, "timeout",
                 v -> v.asInt() != -1);
         warnIfNonEmpty(springTransactional, target, "timeoutString",

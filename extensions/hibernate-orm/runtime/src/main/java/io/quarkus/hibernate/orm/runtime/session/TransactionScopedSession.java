@@ -16,6 +16,7 @@ import jakarta.transaction.Status;
 import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 
+import org.hibernate.FlushMode;
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.Session;
@@ -26,6 +27,7 @@ import org.hibernate.engine.spi.SessionLazyDelegator;
 import io.quarkus.arc.Arc;
 import io.quarkus.hibernate.orm.runtime.HibernateOrmRuntimeConfig;
 import io.quarkus.hibernate.orm.runtime.RequestScopedSessionHolder;
+import io.quarkus.narayana.jta.runtime.ReadOnlyTransactionSynchronization;
 import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.runtime.BlockingOperationNotAllowedException;
 
@@ -95,6 +97,12 @@ public class TransactionScopedSession extends SessionLazyDelegator {
             Session newSession = jtaSessionOpener.openSession();
             // The session has automatically joined the JTA transaction when it was constructed.
             transactionSynchronizationRegistry.putResource(sessionKey, newSession);
+            // TODO once Narayana implements Jakarta Transactions read-only, replace with tsr.isReadOnly().
+            //  See https://github.com/jakartaee/transactions/pull/222
+            if (ReadOnlyTransactionSynchronization.isReadOnly(transactionSynchronizationRegistry)) {
+                newSession.setDefaultReadOnly(true);
+                newSession.setHibernateFlushMode(FlushMode.MANUAL);
+            }
             // No need to flush or close the session upon transaction completion:
             // Hibernate ORM itself registers a synchronization that does just that.
             // See:

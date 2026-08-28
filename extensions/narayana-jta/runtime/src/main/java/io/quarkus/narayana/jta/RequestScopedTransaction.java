@@ -10,10 +10,12 @@ import jakarta.transaction.Status;
 import jakarta.transaction.SystemException;
 import jakarta.transaction.Transaction;
 import jakarta.transaction.TransactionManager;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.UserTransaction;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.narayana.jta.runtime.ReadOnlyTransactionSynchronization;
 import io.quarkus.narayana.jta.runtime.TransactionManagerConfiguration;
 
 /**
@@ -31,15 +33,18 @@ class RequestScopedTransaction {
     private final UserTransaction userTransaction;
     private final TransactionManager transactionManager;
     private final TransactionManagerConfiguration transactionManagerConfiguration;
+    private final TransactionSynchronizationRegistry transactionSynchronizationRegistry;
     private Transaction createdTransaction;
     boolean autoCommit;
 
     @Inject
     public RequestScopedTransaction(UserTransaction userTransaction,
-            TransactionManager transactionManager, TransactionManagerConfiguration transactionManagerConfiguration) {
+            TransactionManager transactionManager, TransactionManagerConfiguration transactionManagerConfiguration,
+            TransactionSynchronizationRegistry transactionSynchronizationRegistry) {
         this.userTransaction = userTransaction;
         this.transactionManager = transactionManager;
         this.transactionManagerConfiguration = transactionManagerConfiguration;
+        this.transactionSynchronizationRegistry = transactionSynchronizationRegistry;
     }
 
     public RequestScopedTransaction() {
@@ -47,11 +52,17 @@ class RequestScopedTransaction {
         this.userTransaction = null;
         this.transactionManagerConfiguration = null;
         this.transactionManager = null;
+        this.transactionSynchronizationRegistry = null;
     }
 
     void begin(BeginOptions options) {
         int timeout = options != null ? options.timeout : 0;
         boolean commitOnRequestScopeEnd = options != null && options.commitOnRequestScopeEnd;
+        boolean readOnly = options != null && options.readOnly;
+        if (commitOnRequestScopeEnd && readOnly) {
+            throw new QuarkusTransactionException(
+                    "Cannot use commitOnRequestScopeEnd() with readOnly(): read-only transactions are always rolled back");
+        }
         try {
             if (userTransaction.getStatus() != Status.STATUS_NO_TRANSACTION) {
                 throw new QuarkusTransactionException("Transaction already active");
@@ -74,6 +85,9 @@ class RequestScopedTransaction {
                     throw new QuarkusTransactionException(e);
                 }
             }
+        }
+        if (readOnly) {
+            ReadOnlyTransactionSynchronization.markReadOnly(transactionSynchronizationRegistry);
         }
     }
 
