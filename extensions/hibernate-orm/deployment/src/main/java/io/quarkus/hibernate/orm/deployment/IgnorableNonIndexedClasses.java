@@ -9,7 +9,7 @@ import io.quarkus.builder.item.MultiBuildItem;
  *
  * @deprecated Use {@link io.quarkus.hibernate.orm.deployment.spi.IgnorableNonIndexedClasses} instead.
  */
-@Deprecated(since = "3.21", forRemoval = true)
+@Deprecated(since = "4.0", forRemoval = true)
 public final class IgnorableNonIndexedClasses extends MultiBuildItem {
 
     private final Set<String> classes;

@@ -11,7 +11,7 @@ import io.quarkus.builder.item.SimpleBuildItem;
  *
  * @deprecated Use {@link io.quarkus.hibernate.orm.deployment.spi.JpaModelPersistenceUnitMappingBuildItem} instead.
  */
-@Deprecated(since = "3.21", forRemoval = true)
+@Deprecated(since = "4.0", forRemoval = true)
 public final class JpaModelPersistenceUnitMappingBuildItem extends SimpleBuildItem {
 
     private final Map<String, Set<String>> entityToPersistenceUnits;
